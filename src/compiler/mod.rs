@@ -6,6 +6,7 @@ use crate::common::{Expr, Register, Type};
 use crate::compiler::asm_file::AsmFile;
 use crate::compiler::register_allocator::RegisterAllocator;
 use crate::lexer::Token;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 
@@ -13,36 +14,45 @@ pub struct Compiler<'a> {
     reg_alloc: RegisterAllocator,
     asm_file: AsmFile,
     expression: &'a Expr<'a>,
-    literals: u64,
+    literals: HashMap<String, String>,
 }
 
 impl Compiler<'_> {
     pub fn new<'a>(expr: &'a Expr<'a>) -> Compiler<'a> {
         Compiler {
+            expression: expr,
             reg_alloc: RegisterAllocator::new(),
             asm_file: AsmFile::new(),
-            expression: expr,
-            literals: 0,
+            literals: HashMap::new(),
+        }
+    }
+
+    fn get_mov_variation(t: &Type) -> &str {
+        match t {
+            Type::I32 => "mov",
+            Type::F64 => "movsd",
         }
     }
 
     fn store_literal(&mut self, t: &Type, lit: &str) -> String {
         let typ = match t {
-            Type::I32 => "dq",
+            Type::I32 => "dd",
             Type::F64 => "dq",
         };
-        let literal = format!("__literal{}", self.literals);
+        let key = format!("{}|{}", typ, lit);
+        if let Some(literal) = self.literals.get(&key) {
+            return literal.clone();
+        }
+
+        let literal = format!("__literal{}", self.literals.len());
         self.asm_file
             .write_rodata(&format!("{} {} {}", literal, typ, lit));
-        self.literals += 1;
+        self.literals.insert(key, literal.clone());
         literal
     }
 
     fn mov_l2r(&mut self, t: &Type, dst: &Register, literal: &str) {
-        let instruction = match t {
-            Type::I32 => "mov",
-            Type::F64 => "movsd",
-        };
+        let instruction = Self::get_mov_variation(t);
         self.asm_file
             .write_instruction2(instruction, &dst.to_string(), literal);
     }
@@ -57,10 +67,7 @@ impl Compiler<'_> {
     }
 
     fn mov_r2r(&mut self, t: &Type, dst: &Register, src: &Register) {
-        let instruction = match t {
-            Type::I32 => "mov",
-            Type::F64 => "movsd",
-        };
+        let instruction = Self::get_mov_variation(t);
         self.asm_file
             .write_instruction2(instruction, &dst.to_string(), &src.to_string());
     }
@@ -124,14 +131,17 @@ impl Compiler<'_> {
     }
 
     fn traverse_ast(&mut self, expr: &Expr) -> Result<(), Box<dyn Error>> {
+        // 20 + ( 20 * 3 ) - ( 3 * 3 ) - 2
+        // 1 + (2 + (3 + (4 + 5)))
+        // 374 / 89 * 20 - 8901
         match expr {
             Expr::Binary(t, left, op, right) => {
                 self.traverse_ast(left)?;
                 self.traverse_ast(right)?;
-                self.reg_alloc.dealloc(t);
 
-                let dst = self.reg_alloc.current(t);
-                let src = self.reg_alloc.next(t);
+                let src = self.reg_alloc.dealloc(t);
+                let dst = self.reg_alloc.peek(t);
+
                 match op {
                     Token::Plus => self.add(t, &dst, &src),
                     Token::Minus => self.sub(t, &dst, &src),
@@ -148,7 +158,7 @@ impl Compiler<'_> {
             }
             Expr::Unary(t, u) => {
                 self.traverse_ast(u)?;
-                let dst = self.reg_alloc.current(t);
+                let dst = self.reg_alloc.peek(t);
                 self.neg(t, &dst);
                 Ok(())
             }

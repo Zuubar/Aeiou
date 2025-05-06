@@ -14,22 +14,18 @@ impl RegisterStack {
         }
     }
 
-    pub fn current(&mut self) -> Register {
+    pub fn peek(&mut self) -> Register {
         self.stack[self.stack_ptr - 1].clone()
-    }
-
-    pub fn next(&mut self) -> Register {
-        self.stack[self.stack_ptr].clone()
     }
 
     pub fn dealloc(&mut self) -> Register {
         self.stack_ptr -= 1;
-        self.current()
+        self.stack[self.stack_ptr].clone()
     }
 
     pub fn alloc(&mut self) -> Register {
         self.stack_ptr += 1;
-        self.current()
+        self.stack[self.stack_ptr - 1].clone()
     }
 }
 
@@ -53,12 +49,8 @@ impl RegisterAllocator {
         }
     }
 
-    pub fn current(&mut self, t: &Type) -> Register {
-        self.get_stack(t).current()
-    }
-
-    pub fn next(&mut self, t: &Type) -> Register {
-        self.get_stack(t).next()
+    pub fn peek(&mut self, t: &Type) -> Register {
+        self.get_stack(t).peek()
     }
 
     pub fn dealloc(&mut self, t: &Type) -> Register {
