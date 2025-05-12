@@ -23,8 +23,8 @@ main:
             ),
         };
 
-        gen.write_data("format db \"= %d\", 10, 0");
-        gen.write_bss("result resd 1");
+        gen.write_data("format_i32 db \"%d\", 10, 0");
+        gen.write_data("format_f64 db \"%f\", 10, 0");
         gen.write_text("push rbp");
         gen.write_text("mov rbp, rsp");
         gen
@@ -57,11 +57,6 @@ main:
     pub fn finalize(&mut self) -> String {
         self.write_text(
             r#"
-    mov [result], rdi
-	mov rdi, format
-	mov rsi, [result]
-	mov rax, 0
-	call printf
 	leave
 	mov rdi, 0
 	call exit

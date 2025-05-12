@@ -1,5 +1,5 @@
-use crate::common::Type;
-use crate::lexer::Token::Number;
+use crate::lexer::Token::{Newline, Number, Print};
+use crate::parser::Type;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -10,7 +10,8 @@ pub enum Token {
     LeftParen,
     RightParen,
     Number(Type, String),
-    Eof,
+    Print,
+    Newline,
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, &str> {
@@ -46,7 +47,24 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, &str> {
                 };
                 Number(num_type, number)
             }
-            ' ' | '\n' | '\r' | '\t' => {
+            'ა'..='ჰ' => {
+                let mut keyword = String::from(char);
+                while let Some(char) = iterator.peek() {
+                    match char {
+                        'ა'..='ჰ' | '0'..='9' => {
+                            keyword.push(*char);
+                            iterator.next();
+                        }
+                        _ => break,
+                    }
+                }
+                match keyword.as_str() {
+                    "დაბეჭდე" => Print,
+                    _ => return Err("Invalid keyword."),
+                }
+            }
+            '\n' => Newline,
+            ' ' | '\r' | '\t' => {
                 continue;
             }
             _ => {
@@ -55,6 +73,5 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, &str> {
         };
         tokens.push(token);
     }
-    // tokens.push(Token::Eof);
     Ok(tokens)
 }
