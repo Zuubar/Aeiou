@@ -23,8 +23,8 @@ main:
             ),
         };
 
-        gen.write_data("format_i32 db \"%d\", 10, 0");
-        gen.write_data("format_f64 db \"%f\", 10, 0");
+        gen.write_data("__aeiou__format_i32 db \"%d\", 10, 0");
+        gen.write_data("__aeiou__format_f64 db \"%f\", 10, 0");
         gen.write_text("push rbp");
         gen.write_text("mov rbp, rsp");
         gen

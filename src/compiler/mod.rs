@@ -2,14 +2,13 @@ mod asm_file;
 mod register;
 
 use crate::compiler::asm_file::AsmFile;
-use crate::compiler::register::Register::{Rax, Rdi, Rdx, Rsi};
+use crate::compiler::register::Register::{Rax, Rdi, Rdx, Rsi, Xmm0};
 use crate::compiler::register::{Register, RegisterAllocator};
-use crate::lexer::Token;
+use crate::lexer::TokenType;
 use crate::parser::{Expr, Stmt, Type};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
-use std::ops::{Deref, DerefMut};
 
 pub struct Compiler {
     reg_alloc: RegisterAllocator,
@@ -43,7 +42,7 @@ impl Compiler {
             return literal.clone();
         }
 
-        let literal = format!("__literal{}", self.literals.len());
+        let literal = format!("__aeiou__literal__{}", self.literals.len());
         self.asm_file
             .write_rodata(&format!("{} {} {}", literal, typ, lit));
         self.literals.insert(key, literal.clone());
@@ -130,56 +129,63 @@ impl Compiler {
     }
 
     fn print(&mut self, t: &Type) {
+        let s = &self.reg_alloc.peek(t);
         match t {
             Type::I32 => {
-                self.asm_file.write_instruction2("mov", &Rdi.to_string(), "format_i32");
-                let s = &self.reg_alloc.peek(t);
+                self.asm_file
+                    .write_instruction2("mov", &Rdi.to_string(), "__aeiou__format_i32");
                 self.mov_r2r(t, &Rsi, s);
-                self.asm_file.write_instruction2("mov", &Rax.to_string(), "0");
-                self.asm_file.write_instruction1("call", "printf");
+                self.mov_l2r(t, &Rax, "0");
             }
             Type::F64 => {
-                self.asm_file.write_instruction2("mov", &Rdi.to_string(), "format_f64");
-                self.asm_file.write_instruction2("mov", &Rax.to_string(), "1");
-                self.asm_file.write_instruction1("call", "printf");
+                self.asm_file
+                    .write_instruction2("mov", &Rdi.to_string(), "__aeiou__format_f64");
+                self.mov_r2r(t, &Xmm0, s);
+                self.mov_l2r(t, &Rax, "1");
             }
         }
+        self.asm_file.write_instruction1("call", "printf");
     }
 
-    fn traverse_ast(&mut self, expr: &Expr) -> Result<(), Box<dyn Error>> {
+    fn var(&mut self, t: &Type) {
+        let a = self.reg_alloc.peek(t);
+        self.asm_file.write_instruction1("push", &a.to_string());
+    }
+
+    fn compile_expr(&mut self, expr: &Expr) -> Result<Type, Box<dyn Error>> {
         match expr {
             Expr::Binary(t, left, op, right) => {
-                self.traverse_ast(left)?;
-                self.traverse_ast(right)?;
+                self.compile_expr(left)?;
+                self.compile_expr(right)?;
 
                 let src = self.reg_alloc.dealloc(t);
                 let dst = self.reg_alloc.peek(t);
 
                 match op {
-                    Token::Plus => self.add(t, &dst, &src),
-                    Token::Minus => self.sub(t, &dst, &src),
-                    Token::Star => self.mul(t, &dst, &src),
-                    Token::Slash => self.div(t, &dst, &src),
+                    TokenType::Plus => self.add(t, &dst, &src),
+                    TokenType::Minus => self.sub(t, &dst, &src),
+                    TokenType::Star => self.mul(t, &dst, &src),
+                    TokenType::Slash => self.div(t, &dst, &src),
                     _ => return Err("Invalid operator".into()),
                 };
 
-                Ok(())
+                Ok(*t)
             }
-            Expr::Grouping(_, group) => {
-                self.traverse_ast(group)?;
-                Ok(())
+            Expr::Grouping(t, group) => {
+                self.compile_expr(group)?;
+                Ok(*t)
             }
             Expr::Unary(t, u) => {
-                self.traverse_ast(u)?;
+                self.compile_expr(u)?;
                 let dst = self.reg_alloc.peek(t);
                 self.neg(t, &dst);
-                Ok(())
+                Ok(*t)
             }
             Expr::Literal(t, lit) => {
                 let dst = self.reg_alloc.alloc(t);
                 let literal = self.store_literal(t, lit);
                 self.mov_m2r(t, &dst, &literal);
-                Ok(())
+                Ok(*t)
             }
         }
     }
@@ -189,15 +195,21 @@ impl Compiler {
             .iter()
             .try_for_each(|stmt| -> Result<(), Box<dyn Error>> {
                 match stmt {
-                    Stmt::Print(t, expr) => {
-                        self.traverse_ast(expr)?;
-                        self.print(t);
-                        self.reg_alloc.dealloc(t);
+                    Stmt::Print(expr) => {
+                        let t = self.compile_expr(expr)?;
+                        self.print(&t);
+                        self.reg_alloc.dealloc(&t);
                         Ok(())
                     }
-                    Stmt::Expression(t, expr) => {
-                        self.traverse_ast(expr)?;
-                        self.reg_alloc.dealloc(t);
+                    Stmt::Expression(expr) => {
+                        let t = self.compile_expr(expr)?;
+                        self.reg_alloc.dealloc(&t);
+                        Ok(())
+                    }
+                    Stmt::Var(type_, name, expr) => {
+                        let t = self.compile_expr(expr)?;
+                        self.var(&t);
+                        self.reg_alloc.dealloc(&t);
                         Ok(())
                     }
                 }

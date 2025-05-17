@@ -1,17 +1,37 @@
-use crate::lexer::Token::{Newline, Number, Print};
-use crate::parser::Type;
-
 #[derive(Clone, Debug, PartialEq)]
-pub enum Token {
+pub enum TokenType {
     Plus,
     Minus,
     Star,
     Slash,
     LeftParen,
     RightParen,
-    Number(Type, String),
+    Number,
     Print,
+    Var,
+    Colon,
+    Equal,
+    EqualEqual,
+    Identifier,
     Newline,
+}
+
+#[derive(Clone, Debug)]
+pub struct Token {
+    pub type_: TokenType,
+    pub string: String,
+}
+
+impl Token {
+    pub fn new(type_: TokenType, string: String) -> Token {
+        Token { type_, string }
+    }
+    pub fn from_type(type_: TokenType) -> Token {
+        Token {
+            type_,
+            string: String::new(),
+        }
+    }
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, &str> {
@@ -20,12 +40,17 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, &str> {
 
     while let Some(char) = iterator.next() {
         let token = match char {
-            '+' => Token::Plus,
-            '-' => Token::Minus,
-            '*' => Token::Star,
-            '/' => Token::Slash,
-            '(' => Token::LeftParen,
-            ')' => Token::RightParen,
+            '+' => Token::from_type(TokenType::Plus),
+            '-' => Token::from_type(TokenType::Minus),
+            '*' => Token::from_type(TokenType::Star),
+            '/' => Token::from_type(TokenType::Slash),
+            '(' => Token::from_type(TokenType::LeftParen),
+            ')' => Token::from_type(TokenType::RightParen),
+            ':' => Token::from_type(TokenType::Colon),
+            '=' => match iterator.next() {
+                Some('=') => Token::from_type(TokenType::EqualEqual),
+                _ => Token::from_type(TokenType::Equal),
+            },
             '0'..='9' => {
                 let mut number = String::from(char);
 
@@ -38,32 +63,33 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, &str> {
                         _ => break,
                     }
                 }
-                let num_type: Type = match number.parse::<i32>() {
-                    Ok(_) => Type::I32,
+
+                match number.parse::<i32>() {
+                    Ok(_) => Token::new(TokenType::Number, number),
                     Err(_) => match number.parse::<f64>() {
-                        Ok(_) => Type::F64,
+                        Ok(_) => Token::new(TokenType::Number, number),
                         Err(_) => return Err("invalid number format."),
                     },
-                };
-                Number(num_type, number)
+                }
             }
-            'ა'..='ჰ' => {
-                let mut keyword = String::from(char);
+            'ა'..='ჰ' | 'a'..='z' | 'A'..='Z' => {
+                let mut identifier = String::from(char);
                 while let Some(char) = iterator.peek() {
                     match char {
-                        'ა'..='ჰ' | '0'..='9' => {
-                            keyword.push(*char);
+                        'ა'..='ჰ' | 'a'..='z' | 'A'..='Z' | '0'..='9' => {
+                            identifier.push(*char);
                             iterator.next();
                         }
                         _ => break,
                     }
                 }
-                match keyword.as_str() {
-                    "დაბეჭდე" => Print,
-                    _ => return Err("Invalid keyword."),
+                match identifier.as_str() {
+                    "დაბეჭდე" => Token::from_type(TokenType::Print),
+                    "ცვლადი" => Token::new(TokenType::Var, identifier),
+                    _ => Token::new(TokenType::Identifier, identifier),
                 }
             }
-            '\n' => Newline,
+            '\n' => Token::from_type(TokenType::Newline),
             ' ' | '\r' | '\t' => {
                 continue;
             }

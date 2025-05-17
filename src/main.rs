@@ -14,7 +14,7 @@ fn read_source() -> Result<String, &'static str> {
 
     match fs::read_to_string(name) {
         Ok(str) => Ok(str),
-        Err(e) => Err("Could not read source file."),
+        Err(_) => Err("Could not read source file."),
     }
 }
 
@@ -23,8 +23,6 @@ fn display_err(err: &str) {
 }
 
 fn main() {
-    // Todo: Terminal emulators add backspace and it screws up input, when entering Georgian
-
     let source = read_source();
     if let Err(err) = source {
         display_err(err);

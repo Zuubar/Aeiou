@@ -1,6 +1,4 @@
-use crate::compiler::register::Register::{
-    Rcx, Rdi, Rsi, Xmm0, Xmm1, Xmm2, Xmm3, Xmm4, Xmm5, Xmm6, R10, R11, R8, R9,
-};
+use crate::compiler::register::Register::{Rcx, Rdi, Rsi, Xmm1, Xmm2, Xmm3, Xmm4, Xmm5, Xmm6, Xmm7, R10, R11, R8, R9};
 use crate::parser::Type;
 use std::fmt::{Display, Formatter};
 
@@ -29,6 +27,7 @@ pub enum Register {
     Xmm4,
     Xmm5,
     Xmm6,
+    Xmm7,
 }
 
 impl Display for Register {
@@ -75,7 +74,7 @@ impl RegisterAllocator {
     pub fn new() -> RegisterAllocator {
         RegisterAllocator {
             stack: RegisterStack::new(vec![Rcx, Rdi, Rsi, R8, R9, R10, R11]),
-            stack_simd: RegisterStack::new(vec![Xmm0, Xmm1, Xmm2, Xmm3, Xmm4, Xmm5, Xmm6]),
+            stack_simd: RegisterStack::new(vec![Xmm1, Xmm2, Xmm3, Xmm4, Xmm5, Xmm6, Xmm7]),
         }
     }
 
